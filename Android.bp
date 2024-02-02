@@ -1,0 +1,54 @@
+//
+// Copyright (C) 2024 The Android Plus Project OS
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+cc_prebuilt_binary {
+	name: "powerpulse",
+	relative_install_path: "hw",
+	proprietary: true,
+	arch: {
+		arm: {
+			srcs: ["bin/powerpulse-android-arm"]
+		},
+		arm64: {
+			srcs: ["bin/powerpulse-android-arm64"]
+		},
+		x86: {
+			srcs: ["bin/powerpulse-android-386"]
+		},
+		x86_64: {
+			srcs: ["bin/powerpulse-android-amd64"]
+		}
+	}
+}
+
+cc_prebuilt_library_shared {
+	name: "libpowerpulse",
+	proprietary: true,
+	arch: {
+		arm: {
+			srcs: ["lib/libpowerpulse-android-arm.so"]
+		},
+		arm64: {
+			srcs: ["lib/libpowerpulse-android-arm64.so"]
+		},
+		x86: {
+			srcs: ["lib/libpowerpulse-android-386.so"]
+		},
+		x86_64: {
+			srcs: ["lib/libpowerpulse-android-amd64.so"]
+		}
+	},
+	export_include_dirs: ["lib/include"]
+}
