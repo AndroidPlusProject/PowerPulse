@@ -203,10 +203,10 @@ func (dev *Device) SetProfile(name string) error {
 			Debug(setsPath)
 		}
 		//To start, clear any old exclusives
-		for setName, set := range sets {
+		for setName, _ := range sets {
 			setPath := pathJoin(setsPath, setName)
 			if debug {
-				Debug("> CPUSets > %s > Exclusive CPU = False (temporarily)", setName, set.CPUExclusive)
+				Debug("> CPUSets > %s > Exclusive CPU = False (temporarily)", setName)
 				Debug(setPath)
 			}
 			exclusivePath := pathJoin(setPath, dev.Paths.Cpusets.Sets[setName].CPUExclusive)
