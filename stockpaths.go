@@ -58,29 +58,14 @@ func GetPaths_Cpusets(prefix ...string) (string, string) {
 	return pathLoop(Paths_Cpusets, prefix...)
 }
 
-var Paths_Cpusets_Foreground = []string{"foreground/cpus"}
-func GetPaths_Cpusets_Foreground(prefix ...string) (string, string) {
-	return pathLoop(Paths_Cpusets_Foreground, prefix...)
+var Paths_Cpusets_CPUs = []string{"cpus"}
+func GetPaths_Cpusets_CPUs(prefix ...string) (string, string) {
+	return pathLoop(Paths_Cpusets_CPUs, prefix...)
 }
 
-var Paths_Cpusets_SystemBackground = []string{"system-background/cpus"}
-func GetPaths_Cpusets_SystemBackground(prefix ...string) (string, string) {
-	return pathLoop(Paths_Cpusets_SystemBackground, prefix...)
-}
-
-var Paths_Cpusets_Background = []string{"background/cpus"}
-func GetPaths_Cpusets_Background(prefix ...string) (string, string) {
-	return pathLoop(Paths_Cpusets_Background, prefix...)
-}
-
-var Paths_Cpusets_TopApp = []string{"top-app/cpus"}
-func GetPaths_Cpusets_TopApp(prefix ...string) (string, string) {
-	return pathLoop(Paths_Cpusets_TopApp, prefix...)
-}
-
-var Paths_Cpusets_Restricted = []string{"restricted/cpus"}
-func GetPaths_Cpusets_Restricted(prefix ...string) (string, string) {
-	return pathLoop(Paths_Cpusets_Restricted, prefix...)
+var Paths_Cpusets_CPUExclusive = []string{"cpu_exclusive"}
+func GetPaths_Cpusets_CPUExclusive(prefix ...string) (string, string) {
+	return pathLoop(Paths_Cpusets_CPUExclusive, prefix...)
 }
 
 var Paths_IPA = []string{"/sys/power/ipa"}

@@ -13,59 +13,106 @@ type Device struct {
 	Profiles map[string]*Profile //Manifest of device settings per profile
 }
 
-func (dev *Device) Write(path string, data interface{}) error {
+func (dev *Device) ReadBool(path string) (bool, error) {
+	buffer, err := ioutil.ReadFile(path)
+	if err != nil {
+		return false, err
+	} else {
+		if buffer[len(buffer)-1] == '\n' { buffer = buffer[:len(buffer)-1] }
+	}
+	switch string(buffer) {
+	case "1", "t", "T", "true", "True", "TRUE", "y", "Y", "yes", "Yes", "YES", "enabled", "Enabled", "ENABLED":
+		return true, nil
+	case "0", "f", "F", "false", "False", "FALSE", "n", "N", "no", "No", "NO", "disabled", "Disabled", "DISABLED":
+		return false, nil
+	}
+	return false, fmt.Errorf("Unknown bool interface for %s", path)
+}
+
+func (dev *Device) WriteBool(path string, data bool) error {
 	buffer, err := ioutil.ReadFile(path)
 	if err != nil {
 		Warn("Failed to read from path %s: %v", path, err)
+	} else {
+		if buffer[len(buffer)-1] == '\n' { buffer = buffer[:len(buffer)-1] }
 	}
-	if buffer[len(buffer)-1] == '\n' { buffer = buffer[:len(buffer)-1] }
+	Debug("Buffer: %s", string(buffer))
+	val1, val0 := "", ""
+	switch string(buffer) {
+	case "1", "0": val1, val0 = "1", "0"
+	case "t", "f": val1, val0 = "t", "f"
+	case "T", "F": val1, val0 = "T", "F"
+	case "true", "false": val1, val0 = "true", "false"
+	case "True", "False": val1, val0 = "True", "False"
+	case "TRUE", "FALSE": val1, val0 = "TRUE", "FALSE"
+	case "y", "n": val1, val0 = "y", "n"
+	case "Y", "N": val1, val0 = "Y", "N"
+	case "yes", "no": val1, val0 = "yes", "no"
+	case "Yes", "No": val1, val0 = "Yes", "No"
+	case "YES", "NO": val1, val0 = "YES", "NO"
+	default:
+		Warn("Using default handler for bool interface on %s", path)
+		//Use 1 and 0 as a last resort
+		val1, val0 = "1", "0"
+	}
+	if data {
+		if string(buffer) == val1 {
+			Debug("Skipping reset !> %s", path)
+			return nil
+		}
+		return dev.Write(path, val1)
+	}
+	if string(buffer) == val0 {
+		Debug("Skipping reset !> %s", path)
+		return nil
+	}
+	return dev.Write(path, val0)
+}
+
+func (dev *Device) WriteNumber(path string, data interface{}) error {
+	switch v := data.(type) {
+	case float64, float32:
+		return dev.Write(path, fmt.Sprintf("%.0F", v))
+	}
+	return dev.Write(path, fmt.Sprintf("%d", data))
+}
+
+func (dev *Device) Write(path, data string) error {
+	if data == "" {
+		return nil //Skip empty config options
+	}
+
+	buffer, err := ioutil.ReadFile(path)
+	if err != nil {
+		Warn("Failed to read from path %s: %v", path, err)
+	} else {
+		if buffer[len(buffer)-1] == '\n' { buffer = buffer[:len(buffer)-1] }
+	}
+	Debug("Buffer: %s", string(buffer))
 
 	dataBytes := make([]byte, 0)
-	switch v := data.(type) {
-	case bool:
-		val1, val0 := "", ""
-		switch string(buffer) {
-		case "1", "0": val1, val0 = "1", "0"
-		case "t", "f": val1, val0 = "t", "f"
-		case "T", "F": val1, val0 = "T", "F"
-		case "true", "false": val1, val0 = "true", "false"
-		case "True", "False": val1, val0 = "True", "False"
-		case "TRUE", "FALSE": val1, val0 = "TRUE", "FALSE"
-		case "y", "n": val1, val0 = "y", "n"
-		case "Y", "N": val1, val0 = "Y", "N"
-		case "yes", "no": val1, val0 = "yes", "no"
-		case "Yes", "No": val1, val0 = "Yes", "No"
-		case "YES", "NO": val1, val0 = "YES", "NO"
-		default:
-			Warn("No handler for bool interface when writing to path %s (defaulting to 0/1)", path)
-			//Use 1 and 0 as a last resort
-			val1, val0 = "1", "0"
-		}
-		if v {
-			dataBytes = []byte(val1)
-		} else {
-			dataBytes = []byte(val0)
-		}
-	case float64:
-		dataBytes = []byte(fmt.Sprintf("%.0F", v))
-	case string:
-		dataBytes = []byte(v)
-	default:
-		return fmt.Errorf("unknown data type '%T' when writing to path %s", v, path)
+	if data == "-" {
+		dataBytes = make([]byte, 0) //Write an empty string
+	} else {
+		dataBytes = []byte(data)
 	}
 
 	if string(buffer) == string(dataBytes) {
-		//Debug("Skipping reset")
+		Debug("Skipping reset !> %s", path)
 		return nil
 	}
 
-	Debug("Writing '%s' > %s", string(dataBytes), path)
-	if dataBytes[len(dataBytes)-1] != '\n' {
+	if len(dataBytes) > 0 {
+		Debug("Writing '%s' > %s", string(dataBytes), path)
+	} else {
+		Debug("Clearing %s", path)
+	}
+	if len(dataBytes) == 0 || dataBytes[len(dataBytes)-1] != '\n' {
 		dataBytes = append(dataBytes, '\n')
 	}
 	err = ioutil.WriteFile(path, dataBytes, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to write to path %s: %v", path, err)
+		return fmt.Errorf("failed to write %s: %v", path, err)
 	}
 	return nil
 }
@@ -133,14 +180,16 @@ func (dev *Device) SetProfile(name string) error {
 					switch v := val.(type) {
 					case bool:
 						Debug("> %s > %s = %t", governorName, arg, v)
+						if err := dev.WriteBool(argPath, v); err != nil {return err}
 					case float64:
 						Debug("> %s > %s = %.0F", governorName, arg, v)
+						if err := dev.WriteNumber(argPath, v); err != nil {return err}
 					case string:
 						Debug("> %s > %s = %s", governorName, arg, v)
+						if err := dev.Write(argPath, v); err != nil {return err}
 					default:
 						return fmt.Errorf("governor %s has invalid value type '%T' for arg %s", governorName, v, arg)
 					}
-					if err := dev.Write(argPath, val); err != nil {return err}
 				}
 			}
 		}
@@ -153,70 +202,35 @@ func (dev *Device) SetProfile(name string) error {
 			Debug("Loading cpusets")
 			Debug(setsPath)
 		}
-		if sets.Foreground != nil {
-			fgPath := pathJoin(setsPath, dev.Paths.Cpusets.Foreground)
+		//To start, clear any old exclusives
+		for setName, set := range sets {
+			setPath := pathJoin(setsPath, setName)
 			if debug {
-				Debug("> CPUSets > Foreground = %s", sets.Foreground)
-				Debug(fgPath)
+				Debug("> CPUSets > %s > Exclusive CPU = False (temporarily)", setName, set.CPUExclusive)
+				Debug(setPath)
 			}
-			if sets.Foreground.CPUs != "" {
-				if err := dev.Write(fgPath, sets.Foreground.CPUs); err != nil {return err}
-			}
-			if sets.Foreground.CPUExclusive != "" {
-				if err := dev.Write(fgPath, sets.Foreground.CPUExclusive); err != nil {return err}
-			}
+			exclusivePath := pathJoin(setPath, dev.Paths.Cpusets.Sets[setName].CPUExclusive)
+			if err := dev.WriteBool(exclusivePath, false); err != nil {return err}
 		}
-		if sets.SystemBackground != nil {
-			sysbgPath := pathJoin(setsPath, dev.Paths.Cpusets.SystemBackground)
+		//Set up the sets
+		for setName, set := range sets {
+			setPath := pathJoin(setsPath, setName)
 			if debug {
-				Debug("> CPUSets > System Background = %s", sets.SystemBackground)
-				Debug(sysbgPath)
+				Debug("> CPUSets > %s > CPUs = %s", setName, set.CPUs)
+				Debug(setPath)
 			}
-			if sets.SystemBackground.CPUs != "" {
-				if err := dev.Write(sysbgPath, sets.SystemBackground.CPUs); err != nil {return err}
-			}
-			if sets.SystemBackground.CPUExclusive != "" {
-				if err := dev.Write(sysbgPath, sets.SystemBackground.CPUExclusive); err != nil {return err}
-			}
+			cpusPath := pathJoin(setPath, dev.Paths.Cpusets.Sets[setName].CPUs)
+			if err := dev.Write(cpusPath, set.CPUs); err != nil {return err}
 		}
-		if sets.Background != nil {
-			sysbgPath := pathJoin(setsPath, dev.Paths.Cpusets.Background)
+		//Finally, set up any new exclusives
+		for setName, set := range sets {
+			setPath := pathJoin(setsPath, setName)
 			if debug {
-				Debug("> CPUSets > Background = %s", sets.Background)
-				Debug(sysbgPath)
+				Debug("> CPUSets > %s > Exclusive CPU = %t", setName, set.CPUExclusive)
+				Debug(setPath)
 			}
-			if sets.Background.CPUs != "" {
-				if err := dev.Write(sysbgPath, sets.Background.CPUs); err != nil {return err}
-			}
-			if sets.Background.CPUExclusive != "" {
-				if err := dev.Write(sysbgPath, sets.Background.CPUExclusive); err != nil {return err}
-			}
-		}
-		if sets.TopApp != nil {
-			sysbgPath := pathJoin(setsPath, dev.Paths.Cpusets.TopApp)
-			if debug {
-				Debug("> CPUSets > Top App = %s", sets.TopApp)
-				Debug(sysbgPath)
-			}
-			if sets.TopApp.CPUs != "" {
-				if err := dev.Write(sysbgPath, sets.TopApp.CPUs); err != nil {return err}
-			}
-			if sets.TopApp.CPUExclusive != "" {
-				if err := dev.Write(sysbgPath, sets.TopApp.CPUExclusive); err != nil {return err}
-			}
-		}
-		if sets.Restricted != nil {
-			sysbgPath := pathJoin(setsPath, dev.Paths.Cpusets.Restricted)
-			if debug {
-				Debug("> CPUSets > Restricted = %s", sets.Restricted)
-				Debug(sysbgPath)
-			}
-			if sets.Restricted.CPUs != "" {
-				if err := dev.Write(sysbgPath, sets.Restricted.CPUs); err != nil {return err}
-			}
-			if sets.Restricted.CPUExclusive != "" {
-				if err := dev.Write(sysbgPath, sets.Restricted.CPUExclusive); err != nil {return err}
-			}
+			exclusivePath := pathJoin(setPath, dev.Paths.Cpusets.Sets[setName].CPUExclusive)
+			if err := dev.WriteBool(exclusivePath, set.CPUExclusive); err != nil {return err}
 		}
 	}
 
@@ -281,13 +295,13 @@ func (dev *Device) SetProfile(name string) error {
 			Debug("> Kernel > Dynamic Hotplug = %t", krnl.DynamicHotplug)
 			Debug(dynamicHotplugPath)
 		}
-		if err := dev.Write(dynamicHotplugPath, krnl.DynamicHotplug); err != nil {return err}
+		if err := dev.WriteBool(dynamicHotplugPath, krnl.DynamicHotplug); err != nil {return err}
 		powerEfficientPath := dev.Paths.Kernel.PowerEfficient
 		if debug {
 			Debug("> Kernel > Power Efficient = %t", krnl.PowerEfficient)
 			Debug(powerEfficientPath)
 		}
-		if err := dev.Write(powerEfficientPath, krnl.PowerEfficient); err != nil {return err}
+		if err := dev.WriteBool(powerEfficientPath, krnl.PowerEfficient); err != nil {return err}
 		if krnl.HMP != nil {
 			hmp := krnl.HMP
 			hmpPath := dev.Paths.Kernel.HMP.Path
@@ -301,25 +315,25 @@ func (dev *Device) SetProfile(name string) error {
 				Debug("> Kernel > HMP > Boost = %t", hmp.Boost)
 				Debug(boostPath)
 			}
-			if err := dev.Write(boostPath, hmp.Boost); err != nil {return err}
+			if err := dev.WriteBool(boostPath, hmp.Boost); err != nil {return err}
 			semiboostPath := pathJoin(hmpPath, hmpPaths.Semiboost)
 			if debug {
 				Debug("> Kernel > HMP > Semiboost = %t", hmp.Semiboost)
 				Debug(semiboostPath)
 			}
-			if err := dev.Write(semiboostPath, hmp.Semiboost); err != nil {return err}
+			if err := dev.WriteBool(semiboostPath, hmp.Semiboost); err != nil {return err}
 			activeDownMigrationPath := pathJoin(hmpPath, hmpPaths.ActiveDownMigration)
 			if debug {
 				Debug("> Kernel > HMP > Active Down Migration = %t", hmp.ActiveDownMigration)
 				Debug(activeDownMigrationPath)
 			}
-			if err := dev.Write(activeDownMigrationPath, hmp.ActiveDownMigration); err != nil {return err}
+			if err := dev.WriteBool(activeDownMigrationPath, hmp.ActiveDownMigration); err != nil {return err}
 			aggressiveUpMigrationPath := pathJoin(hmpPath, hmpPaths.AggressiveUpMigration)
 			if debug {
 				Debug("> Kernel > HMP > Aggressive Up Migration = %t", hmp.AggressiveUpMigration)
 				Debug(aggressiveUpMigrationPath)
 			}
-			if err := dev.Write(aggressiveUpMigrationPath, hmp.AggressiveUpMigration); err != nil {return err}
+			if err := dev.WriteBool(aggressiveUpMigrationPath, hmp.AggressiveUpMigration); err != nil {return err}
 			if hmp.Threshold != nil {
 				thld := hmp.Threshold
 				down := thld.Down.String()
@@ -375,7 +389,7 @@ func (dev *Device) SetProfile(name string) error {
 			Debug("> IPA > Enabled = %t", ipa.Enabled)
 			Debug(enabledPath)
 		}
-		if err := dev.Write(enabledPath, ipa.Enabled); err != nil {return err}
+		if err := dev.WriteBool(enabledPath, ipa.Enabled); err != nil {return err}
 		if ipa.Enabled {
 			controlTemp := ipa.ControlTemp.String()
 			if controlTemp != "" {
@@ -422,14 +436,14 @@ func (dev *Device) SetProfile(name string) error {
 			Debug("> sec_slow > Enabled = %t", slow.Enabled)
 			Debug(enabledPath)
 		}
-		if err := dev.Write(enabledPath, slowPaths.Enabled); err != nil {return err}
+		if err := dev.WriteBool(enabledPath, slow.Enabled); err != nil {return err}
 		if slow.Enabled {
 			enforcedPath := slowPaths.Enforced
 			if debug {
 				Debug("> sec_slow > Enforced = %t", slow.Enforced)
 				Debug(enforcedPath)
 			}
-			if err := dev.Write(enforcedPath, slow.Enforced); err != nil {return err}
+			if err := dev.WriteBool(enforcedPath, slow.Enforced); err != nil {return err}
 			timerRate := slow.TimerRate.String()
 			if timerRate != "" {
 				timerRatePath := slowPaths.TimerRate

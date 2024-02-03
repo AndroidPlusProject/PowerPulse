@@ -6,7 +6,7 @@ import (
 
 type Profile struct {
 	Clusters map[string]*Cluster
-	CPUSets *CPUSets
+	CPUSets map[string]*CPUSet
 	GPU *GPU
 	Kernel *Kernel
 	IPA *IPA
@@ -18,17 +18,9 @@ type Cluster struct {
 	CPUFreq *CPUFreq
 }
 
-type CPUSets struct {
-	Foreground *CPUSet
-	SystemBackground *CPUSet `json:"system_background"`
-	Background *CPUSet
-	TopApp *CPUSet `json:"top_app"`
-	Restricted *CPUSet
-}
-
 type CPUSet struct {
 	CPUs string
-	CPUExclusive string `json:"cpu_exclusive"`
+	CPUExclusive bool `json:"cpu_exclusive"`
 }
 
 type GPU struct {
@@ -37,8 +29,8 @@ type GPU struct {
 }
 
 type DVFS struct {
-	Min json.Number
 	Max json.Number
+	Min json.Number
 }
 
 type GPUHighspeed struct {

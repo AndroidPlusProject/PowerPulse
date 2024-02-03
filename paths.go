@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 )
 
@@ -37,11 +38,10 @@ type PathsCPUFreqStats struct {
 
 type PathsCpusets struct {
 	Path string //universal7420: /dev/cpuset
-	Foreground string //universal7420: foreground
-	SystemBackground string //universal7420: system-background
-	Background string //universal7420: background
-	TopApp string //universal7420: top-app
-	Restricted string //universal7420: restricted
+	Sets map[string]PathsCpuset //universal7420: background, foreground, restricted, system-background, top-app
+}
+
+type PathsCpuset struct {
 	CPUs string //universal7420: cpus
 	CPUExclusive string //universal7420: cpu_exclusive
 }
@@ -176,15 +176,22 @@ func (p *Paths) Init() error {
 	}
 
 	if p.Cpusets == nil {
-		cpusets := &PathsCpusets{}
+		cpusets := &PathsCpusets{Sets: make(map[string]PathsCpuset)}
 		cpusetsPath, _ := GetPaths_Cpusets()
 		if cpusetsPath != "" {
 			cpusets.Path = cpusetsPath
-			cpusets.Foreground, _ = GetPaths_Cpusets_Foreground(cpusetsPath)
-			cpusets.SystemBackground, _ = GetPaths_Cpusets_SystemBackground(cpusetsPath)
-			cpusets.Background, _ = GetPaths_Cpusets_Background(cpusetsPath)
-			cpusets.TopApp, _ = GetPaths_Cpusets_TopApp(cpusetsPath)
-			cpusets.Restricted, _ = GetPaths_Cpusets_Restricted(cpusetsPath)
+			sets, err := ioutil.ReadDir(cpusetsPath)
+			if err != nil {
+				return pathErrorDefinition("cpusets/path")
+			}
+			for _, set := range sets {
+				if set.IsDir() {
+					cpusetPath := PathsCpuset{}
+					cpusetPath.CPUs, _ = GetPaths_Cpusets_CPUs(cpusetsPath)
+					cpusetPath.CPUExclusive, _ = GetPaths_Cpusets_CPUExclusive(cpusetsPath)
+					cpusets.Sets[set.Name()] = cpusetPath
+				}
+			}
 			p.Cpusets = cpusets
 		}
 	} else {
@@ -194,21 +201,17 @@ func (p *Paths) Init() error {
 			//Cpusets defined in manifest paths, require a valid path to be available
 			return pathErrorDefinition("cpusets")
 		}
-		if err := pathMustOrStockCanExist(&cpusets.Foreground, GetPaths_Cpusets_Foreground, cpusetsPath); err != nil {
-			return pathErrorInvalid(cpusets.Foreground, "cpusets/foreground")
+		for cpusetName, cpusetPath := range cpusets.Sets {
+			setPath := pathJoin(cpusetsPath, cpusetName)
+			if err := pathMustOrStockCanExist(&cpusetPath.CPUs, GetPaths_Cpusets_CPUs, setPath); err != nil {
+				return pathErrorInvalid(cpusetPath.CPUs, "cpusets/" + cpusetName + "/cpus")
+			}
+			if err := pathMustOrStockCanExist(&cpusetPath.CPUExclusive, GetPaths_Cpusets_CPUExclusive, setPath); err != nil {
+				return pathErrorInvalid(cpusetPath.CPUExclusive, "cpusets/" + cpusetName + "/cpu_exclusive")
+			}
+			cpusets.Sets[cpusetName] = cpusetPath
 		}
-		if err := pathMustOrStockCanExist(&cpusets.SystemBackground, GetPaths_Cpusets_SystemBackground, cpusetsPath); err != nil {
-			return pathErrorInvalid(cpusets.SystemBackground, "cpusets/system_background")
-		}
-		if err := pathMustOrStockCanExist(&cpusets.Background, GetPaths_Cpusets_Background, cpusetsPath); err != nil {
-			return pathErrorInvalid(cpusets.Background, "cpusets/background")
-		}
-		if err := pathMustOrStockCanExist(&cpusets.TopApp, GetPaths_Cpusets_TopApp, cpusetsPath); err != nil {
-			return pathErrorInvalid(cpusets.TopApp, "cpusets/top-app")
-		}
-		if err := pathMustOrStockCanExist(&cpusets.Restricted, GetPaths_Cpusets_Restricted, cpusetsPath); err != nil {
-			return pathErrorInvalid(cpusets.Restricted, "cpusets/restricted")
-		}
+		p.Cpusets = cpusets
 	}
 
 	if p.IPA == nil {
