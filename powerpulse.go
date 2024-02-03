@@ -92,8 +92,31 @@ func PowerPulse_Init() {
 	}
 	booted = true
 	startTime := time.Now()
-	Info("Need to boot PowerPulse first, just a blip...")
 
+	Info("Need to boot PowerPulse first, just a blip...")
+	PowerPulse_ReloadConfig()
+
+	Info("Stargazing for desired profile")
+	found := false
+	for profileName := range device.Profiles {
+		if profileNow == profileName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		profileNow = device.ProfileOrder[len(device.ProfileOrder)-1]
+	}
+
+	Info("Applying profile %s", profileNow)
+	setProfile(profileNow)
+
+	deltaTime := time.Now().Sub(startTime).Milliseconds()
+	Info("PowerPulse finished init in %dms", deltaTime)
+}
+
+//export PowerPulse_ReloadConfig
+func PowerPulse_ReloadConfig() {
 	deviceJSON := make([]byte, 0)
 	for i := 0; i < len(manifests); i++ {
 		tmpJSON, err := ioutil.ReadFile(manifests[i])
@@ -194,24 +217,6 @@ func PowerPulse_Init() {
 		return
 	}
 	Debug("Profile order: %s", device.ProfileOrder)
-
-	Info("Stargazing for desired profile")
-	found := false
-	for profileName := range device.Profiles {
-		if profileNow == profileName {
-			found = true
-			break
-		}
-	}
-	if !found {
-		profileNow = device.ProfileOrder[len(device.ProfileOrder)-1]
-	}
-
-	Info("Applying profile %s", profileNow)
-	setProfile(profileNow)
-
-	deltaTime := time.Now().Sub(startTime).Milliseconds()
-	Info("PowerPulse finished init in %dms", deltaTime)
 }
 
 func main() {
