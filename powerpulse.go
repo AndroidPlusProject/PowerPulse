@@ -96,21 +96,6 @@ func PowerPulse_Init() {
 	Info("Need to boot PowerPulse first, just a blip...")
 	PowerPulse_ReloadConfig()
 
-	Info("Stargazing for desired profile")
-	found := false
-	for profileName := range device.Profiles {
-		if profileNow == profileName {
-			found = true
-			break
-		}
-	}
-	if !found {
-		profileNow = device.ProfileOrder[len(device.ProfileOrder)-1]
-	}
-
-	Info("Applying profile %s", profileNow)
-	setProfile(profileNow)
-
 	deltaTime := time.Now().Sub(startTime).Milliseconds()
 	Info("PowerPulse finished init in %dms", deltaTime)
 }
@@ -169,7 +154,15 @@ func PowerPulse_ReloadConfig() {
 	}
 
 	if profileNow == "" {
-		profileNow = device.ProfileBoot
+		if device.ProfileBoot != "" {
+			profileNow = strings.ReplaceAll(strings.ToLower(device.ProfileBoot), " ", "_")
+		}
+		if device.Paths.PowerPulse != nil && device.Paths.PowerPulse.Profile != "" {
+			profileBytes, err := ioutil.ReadFile(device.Paths.PowerPulse.Profile)
+			if err == nil && len(profileBytes) > 0 {
+				profileNow = strings.ReplaceAll(strings.ToLower(device.Paths.PowerPulse.Profile), " ", "_")
+			}
+		}
 	} else {
 		profileNow = strings.ReplaceAll(strings.ToLower(profileNow), " ", "_")
 	}
@@ -228,4 +221,19 @@ func main() {
 	pflag.BoolVarP(&verbose, "verbose", "v", verbose, "verbose mode")
 	pflag.Parse()
 	PowerPulse_Init()
+
+	Info("Stargazing for desired profile")
+	found := false
+	for profileName := range device.Profiles {
+		if profileNow == profileName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		profileNow = device.ProfileOrder[len(device.ProfileOrder)-1]
+	}
+
+	Info("Applying profile %s", profileNow)
+	setProfile(profileNow)
 }

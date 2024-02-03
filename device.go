@@ -458,5 +458,9 @@ func (dev *Device) SetProfile(name string) error {
 
 	deltaTime := time.Now().Sub(startTime).Milliseconds()
 	Info("PowerPulse finished applying %s in %dms", name, deltaTime)
+
+	if dev.Paths.PowerPulse != nil && dev.Paths.PowerPulse.Profile != "" {
+		dev.Write(dev.Paths.PowerPulse.Profile, name)
+	}
 	return nil
 }

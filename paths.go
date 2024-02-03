@@ -7,6 +7,7 @@ import (
 )
 
 type Paths struct {
+	PowerPulse *PathsPowerPulse
 	Clusters map[string]PathsCluster
 	Cpusets *PathsCpusets
 	IPA *PathsIPA
@@ -14,6 +15,10 @@ type Paths struct {
 	Kernel *PathsKernel
 	InputBooster *PathsInputBooster
 	SecSlow *PathsSecSlow
+}
+
+type PathsPowerPulse struct {
+	Profile string //universal7420: /data/adb/powerpulse.profile
 }
 
 type PathsCluster struct { //universal7420: apollo, atlas
