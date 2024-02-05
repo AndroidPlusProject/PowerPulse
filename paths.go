@@ -32,6 +32,7 @@ type PathsCPUFreq struct {
 	Governors string //universal7420: scaling_available_governors
 	Max string //universal7420: scaling_max_freq
 	Min string //universal7420: scaling_min_freq
+	Speed string //universal7420: scaling_setspeed
 	Stats *PathsCPUFreqStats
 }
 
@@ -130,6 +131,7 @@ func (p *Paths) Init() error {
 					freq.Governors, _ = GetPaths_CPUFreq_Governors(freqPath)
 					freq.Max, _ = GetPaths_CPUFreq_Max(freqPath)
 					freq.Min, _ = GetPaths_CPUFreq_Min(freqPath)
+					freq.Speed, _ = GetPaths_CPUFreq_Speed(freqPath)
 				}
 			} else {
 				freqPath, err = pathOrStockMustExist(&freq.Path, GetPaths_CPUFreq, cluster.Path)
@@ -148,6 +150,9 @@ func (p *Paths) Init() error {
 				}
 				if err := pathMustOrStockCanExist(&freq.Min, GetPaths_CPUFreq_Min, freqPath); err != nil {
 					return pathErrorInvalid(freq.Min, "clusters/%s/cpufreq/min", clusterName)
+				}
+				if err := pathMustOrStockCanExist(&freq.Speed, GetPaths_CPUFreq_Speed, freqPath); err != nil {
+					return pathErrorInvalid(freq.Speed, "clusters/%s/cpufreq/speed", clusterName)
 				}
 			}
 			cluster.CPUFreq = freq

@@ -38,6 +38,11 @@ func GetPaths_CPUFreq_Min(prefix ...string) (string, string) {
 	return pathLoop(Paths_CPUFreq_Min, prefix...)
 }
 
+var Paths_CPUFreq_Speed = []string{"scaling_setspeed"}
+func GetPaths_CPUFreq_Speed(prefix ...string) (string, string) {
+	return pathLoop(Paths_CPUFreq_Speed, prefix...)
+}
+
 var Paths_CPUFreq_Stats = []string{"stats"}
 func GetPaths_CPUFreq_Stats(prefix ...string) (string, string) {
 	return pathLoop(Paths_CPUFreq_Stats, prefix...)

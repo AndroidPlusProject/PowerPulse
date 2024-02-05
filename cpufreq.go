@@ -7,6 +7,7 @@ import (
 type CPUFreq struct {
 	Max json.Number
 	Min json.Number
+	Speed json.Number
 	Governor string
 	Governors map[string]map[string]interface{} //"interactive":{"arg":0,"arg2":"val"},"performance":{"arg":true}
 }
