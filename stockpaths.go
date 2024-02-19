@@ -202,3 +202,13 @@ var Paths_SecSlow_TimerRate = []string{"timer_rate"}
 func GetPaths_SecSlow_TimerRate(prefix ...string) (string, string) {
 	return pathLoop(Paths_SecSlow_TimerRate, prefix...)
 }
+
+var Paths_Input = []string{"/sys/class/input"}
+func GetPaths_Input(prefix ...string) (string, string) {
+	return pathLoop(Paths_Input, prefix...)
+}
+
+var Paths_Input_Enabled = []string{"enabled"}
+func GetPaths_Input_Enabled(prefix ...string) (string, string) {
+	return pathLoop(Paths_Input_Enabled, prefix...)
+}

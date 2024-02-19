@@ -17,6 +17,9 @@ cc_prebuilt_binary {
 	name: "powerpulse",
 	relative_install_path: "hw",
 	proprietary: true,
+	strip: {
+		all: true
+	},
 	arch: {
 		arm: {
 			srcs: ["bin/powerpulse-android-arm"]
@@ -36,6 +39,9 @@ cc_prebuilt_binary {
 cc_prebuilt_library_shared {
 	name: "libpowerpulse",
 	proprietary: true,
+	strip: {
+		all: true
+	},
 	arch: {
 		arm: {
 			srcs: ["lib/libpowerpulse-android-arm.so"]

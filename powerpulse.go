@@ -65,6 +65,9 @@ func setProfile(profile string) {
 	defer lock.Unlock()
 	Debug("Got past lock for setProfile(%s)", profile)
 
+	//When device.SetProfile is called but device.ProfileLock is true, profileNow is still updated with the new request
+	profileLast = profileNow
+
 	if !bootedProfile && device.ProfileBoot != "" && device.ProfileBootDuration.String() != "" {
 		Debug("Applying boot profile %s", device.ProfileBoot)
 		duration, err := device.ProfileBootDuration.Int64()
@@ -82,18 +85,23 @@ func setProfile(profile string) {
 			profile = profileNow
 		}
 		if duration > 0 {
-			device.Lock()
+			device.ProfileLock = true
 			Debug("Deferring profile %s for %d seconds", profile, duration)
 			time.Sleep(time.Second * time.Duration(duration))
-			device.Unlock()
+			device.ProfileLock = false
 		}
 	}
+
+	//Check if we need to change course on which profile to apply
+	if profileNow != profileLast {
+		profile = profileNow
+	}
+
 	Info("Applying profile %s", profile)
 	if err := device.SetProfile(profile); err != nil {
 		Error("Error applying profile %s: %v", profile, err)
 		return
 	}
-	profileLast = profileNow
 	profileNow = profile
 	if err := device.CacheProfile(profile); err != nil {
 		Warn("Failed to cache profile %s for reboot: %v", profile, err)
@@ -129,13 +137,30 @@ func PowerPulse_SetInteractive(interactive bool) {
 	go setInteractive(interactive)
 }
 func setInteractive(interactive bool) {
-	off := device.GetProfile("screen_off")
-	if off != nil {
+	for inputName, input := range device.Paths.Inputs {
+		if input.Path != "" {
+			switch input.Type {
+			case "touchkey", "touchscreen":
+				if input.Enabled != "" {
+					enabledPath := pathJoin(input.Path, input.Enabled)
+					if interactive {
+						Debug("Interacting with %s (%s)", inputName, input.Type)
+						device.write(enabledPath, "1")
+					} else {
+						Debug("Not interacting with %s (%s)", inputName, input.Type)
+						device.write(enabledPath, "0")
+					}
+				}
+			}
+		}
+	}
+
+	if profile := device.GetProfile("screen_off"); profile != nil {
 		if interactive {
-			Debug("Interacting")
+			Debug("Turning off screen off profile")
 			resetProfile()
 		} else {
-			Debug("Not interacting")
+			Debug("Turning on screen off profile")
 			setProfile("screen_off")
 		}
 	}
@@ -143,17 +168,118 @@ func setInteractive(interactive bool) {
 
 //export PowerPulse_SetPowerHint
 func PowerPulse_SetPowerHint(hint, data int32) {
-	//Debug("PowerHint: hint:%d data:%d", hint, data)
+	go setPowerHint(hint, data)
+}
+func setPowerHint(hint, data int32) {
+	switch PowerHint(hint) {
+	case HINT_VSYNC:
+		if data > 0 {
+			Debug("PowerHint: VSYNC: on")
+			//TODO: device.Boosting = true; go device.BoostIf()
+			device.Boost(16666) //1 frame @60Hz
+		} else {
+			Debug("PowerHint: VSYNC: off")
+			//TODO: device.Boosting = false
+		}
+		return
+
+	case HINT_INTERACTION:
+		device.Boost(data * 1000)
+		return
+
+	case HINT_VIDEO_ENCODE:
+		Debug("PowerHint: DEPRECATED: VIDEO_ENCODE: %d", data)
+		return
+
+	case HINT_VIDEO_DECODE:
+		Debug("PowerHint: DEPRECATED: VIDEO_DECODE: %d", data)
+		return
+
+	case HINT_LOW_POWER:
+		if profile := device.GetProfile("battery_saver"); profile != nil {
+			if data > 0 {
+				Debug("Turning on battery saver profile")
+				setProfile("battery_saver")
+			} else {
+				Debug("Turning off battery saver profile")
+				resetProfile()
+			}
+		}
+		return
+
+	case HINT_LAUNCH:
+		if data > 0 {
+			//TODO: device.Boosting = true; go device.BoostIf()
+			device.Boost(3000000) //3 seconds
+		} else {
+			//TODO: device.Boosting = false
+		}
+		return
+
+	case HINT_SUSTAINED_PERFORMANCE, HINT_VR_MODE,
+		HINT_AUDIO_STREAMING, HINT_AUDIO_LOW_LATENCY,
+		HINT_CAMERA_LAUNCH, HINT_CAMERA_STREAMING, HINT_CAMERA_SHOT,
+		HINT_EXPENSIVE_RENDERING, HINT_LINEAGE_CPU_BOOST:
+		if profile := device.GetProfile("performance"); profile != nil {
+			if data > 0 {
+				Debug("Turning on performance profile")
+				setProfile("performance")
+			} else {
+				Debug("Turning off performance profile")
+				resetProfile()
+			}
+		}
+		return
+
+	case HINT_LINEAGE_SET_PROFILE:
+		switch data {
+		case -1:
+			setProfile("screen_off")
+		case 0:
+			setProfile("battery_saver")
+		case 3:
+			setProfile("efficiency")
+		case 1:
+			setProfile("balanced")
+		case 4:
+			setProfile("quick")
+		case 2:
+			setProfile("performance")
+		}
+		return
+	}
+
+	Debug("PowerHint: %d: %d (not supported)", hint, data)
 }
 
 //export PowerPulse_SetFeature
 func PowerPulse_SetFeature(feature int32, activate bool) {
-	Debug("SetFeature: feature:%d activate:%t", feature, activate)
+	switch PowerFeature(feature) {
+	case FEATURE_DOUBLE_TAP_TO_WAKE: //POWER_FEATURE_DOUBLE_TAP_TO_WAKE
+		Debug("SetFeature: POWER_FEATURE_DOUBLE_TAP_TO_WAKE: %t", activate)
+		return
+	}
+
+	Debug("SetFeature: %d: %t (not supported)", feature, activate)
 }
 
 //export PowerPulse_GetFeature
 func PowerPulse_GetFeature(feature int32) uint32 {
-	Debug("GetFeature: feature:%d", feature)
+	switch PowerFeature(feature) {
+	case FEATURE_DOUBLE_TAP_TO_WAKE:
+		Debug("GetFeature: DOUBLE_TAP_TO_WAKE: true")
+		return 1 //TODO: return from config
+
+	case FEATURE_SUPPORTED_PROFILES:
+		if len(device.ProfileOrder) > 0 {
+			Debug("GetFeature: SUPPORTED_PROFILES: true")
+			return uint32(len(device.ProfileOrder))
+		}
+		Debug("GetFeature: SUPPORTED_PROFILES: false")
+		return 0
+	}
+
+	Debug("GetFeature: %d: (not supported)", feature)
 	return 0
 }
 

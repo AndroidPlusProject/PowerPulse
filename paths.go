@@ -15,6 +15,7 @@ type Paths struct {
 	Kernel *PathsKernel
 	InputBooster *PathsInputBooster
 	SecSlow *PathsSecSlow
+	Inputs map[string]PathsInput
 }
 
 type PathsPowerPulse struct {
@@ -108,12 +109,17 @@ type PathsSecSlow struct {
 	TimerRate string //universal7420: timer_rate
 }
 
+type PathsInput struct {
+	Enabled string //universal7420: enabled
+	Path string //universal7420: /sys/class/input/input*
+	Type string //universal7420: "touchkey" or "touchscreen" for now, used to toggle input states when told to
+}
+
 func (p *Paths) Init() error {
 	if p.Clusters != nil && len(p.Clusters) > 0 {
 		for clusterName, _ := range p.Clusters {
 			cluster := p.Clusters[clusterName]
-			_, err := pathOrStockMustExist(&cluster.Path, GetPaths_Cluster)
-			if err != nil {
+			if _, err := pathOrStockMustExist(&cluster.Path, GetPaths_Cluster); err != nil {
 				//Cluster defined in manifest paths, require a valid path to be available
 				return pathErrorDefinition("clusters/%s", clusterName)
 			}
@@ -123,7 +129,7 @@ func (p *Paths) Init() error {
 			freqPath := ""
 			if freq == nil {
 				freq = &PathsCPUFreq{}
-				freqPath, _ := GetPaths_CPUFreq(cluster.Path, pathJoin(cluster.Path, clusterName))
+				freqPath, _ = GetPaths_CPUFreq(cluster.Path, pathJoin(cluster.Path, clusterName))
 				if freqPath != "" {
 					freq.Path = freqPath
 					freqPath = pathJoin(cluster.Path, freqPath)
@@ -134,7 +140,7 @@ func (p *Paths) Init() error {
 					freq.Speed, _ = GetPaths_CPUFreq_Speed(freqPath)
 				}
 			} else {
-				freqPath, err = pathOrStockMustExist(&freq.Path, GetPaths_CPUFreq, cluster.Path)
+				freqPath, err := pathOrStockMustExist(&freq.Path, GetPaths_CPUFreq, cluster.Path)
 				if err != nil {
 					//CPUFreq defined in manifest paths, require a valid path to be available
 					return pathErrorDefinition("clusters/%s/cpufreq relative to path %s", clusterName, cluster.Path)
@@ -155,7 +161,6 @@ func (p *Paths) Init() error {
 					return pathErrorInvalid(freq.Speed, "clusters/%s/cpufreq/speed", clusterName)
 				}
 			}
-			cluster.CPUFreq = freq
 			if freq.Stats == nil {
 				stats := &PathsCPUFreqStats{}
 				statsPath, prefix := GetPaths_CPUFreq_Stats(freqPath)
@@ -179,7 +184,9 @@ func (p *Paths) Init() error {
 				if err := pathMustOrStockCanExist(&stats.TotalTrans, GetPaths_CPUFreq_Stats_TotalTrans, statsPath); err != nil {
 					return pathErrorInvalid(stats.TotalTrans, "clusters/%s/stats/total_trans", clusterName)
 				}
+				freq.Stats = stats
 			}
+			cluster.CPUFreq = freq
 			delete(p.Clusters, clusterName)
 			p.Clusters[clusterName] = cluster
 		}
@@ -432,6 +439,22 @@ func (p *Paths) Init() error {
 		}
 		if err := pathMustOrStockCanExist(&slow.TimerRate, GetPaths_SecSlow_TimerRate, slowPath); err != nil {
 			return pathErrorInvalid(slow.TimerRate, "sec_slow/timer_rate")
+		}
+	}
+
+	if p.Inputs != nil && len(p.Inputs) > 0 {
+		for inputName, _ := range p.Inputs {
+			//We only want to recognize plugged in inputs, as they won't always be present
+			//TODO: Listen to all input paths for any new directories so we can register configured paths
+			input := p.Inputs[inputName]
+			delete(p.Inputs, inputName)
+			if _, err := pathOrStockMustExist(&input.Path, GetPaths_Input); err != nil {
+				continue
+			}
+			if err := pathMustOrStockCanExist(&input.Enabled, GetPaths_Input_Enabled, input.Path); err != nil {
+				continue
+			}
+			p.Inputs[inputName] = input
 		}
 	}
 
